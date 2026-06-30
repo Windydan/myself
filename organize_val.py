@@ -6,31 +6,21 @@ import argparse
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--val-dir", required=True, help="flat val directory")
-    parser.add_argument("--val-txt", required=True, help="val.txt with filename and label")
-    parser.add_argument("--class-index", required=True, help="imagenet_class_index.json")
-    parser.add_argument("--move", action="store_true", help="move files instead of copy")
+    parser.add_argument("--val-dir", required=True)
+    parser.add_argument("--val-txt", required=True)
+    parser.add_argument("--class-index", required=True)
+    parser.add_argument("--move", action="store_true")
     args = parser.parse_args()
 
-    val_dir = Path(args.val_dir).expanduser()
+    val_dir = Path(args.val-dir).expanduser()
     val_txt = Path(args.val_txt).expanduser()
     class_index = Path(args.class_index).expanduser()
-
-    if not val_dir.exists():
-        raise FileNotFoundError(f"val dir not found: {val_dir}")
-    if not val_txt.exists():
-        raise FileNotFoundError(f"val.txt not found: {val_txt}")
-    if not class_index.exists():
-        raise FileNotFoundError(f"class index not found: {class_index}")
 
     with class_index.open("r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # json key: 0-based class id -> synset
-    idx_to_synset = {}
-    for k in sorted(data.keys(), key=int):
-        synset, _ = data[k]
-        idx_to_synset[int(k) + 1] = synset  # convert to 1-based label in val.txt
+    idx_to_synset_0 = {int(k): v[0] for k, v in data.items()}
+    idx_to_synset_1 = {int(k) + 1: v[0] for k, v in data.items()}
 
     records = []
     with val_txt.open("r", encoding="utf-8") as f:
@@ -40,6 +30,11 @@ def main():
                 continue
             fname, label = line.split()
             records.append((fname, int(label)))
+
+    labels = [label for _, label in records]
+    use_one_based = min(labels) == 1
+
+    idx_to_synset = idx_to_synset_1 if use_one_based else idx_to_synset_0
 
     op = shutil.move if args.move else shutil.copy2
 
@@ -59,12 +54,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-'''
-python organize_imagenet_val.py \
-  --val-dir ~/OOD/IIM-SMCM/data/ood/imagenet/val \
-  --val-txt ~/OOD/NegPrompt/data/ImageNet1K/protocols/val.txt \
-  --class-index ~/OOD/NegPrompt/data/ImageNet1K/protocols/imagenet_class_index.json \
-  --move
-'''
